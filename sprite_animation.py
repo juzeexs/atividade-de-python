@@ -3,35 +3,21 @@ sprite_animation.py
 -------------------
 Animação de sprite da 'Criatura das Sombras' usando Pygame.
 
-CORREÇÕES APLICADAS:
-  1. FRAME_W=102, FRAME_H=78 (medido direto do spritesheet 1027x781)
-  2. Mapeamento correto de todas as linhas e contagem de frames
-  3. Anotações de tipo simplificadas (compatível com Python 3.9+)
-  4. Instalação: use 'pip install pygame-ce' se pygame falhar no Python 3.14
-
-Dependências:
-    pip install pygame
-    # Se falhar no Python 3.14, use:
-    pip install pygame-ce
-
 Uso:
     python sprite_animation.py
-    python sprite_animation.py caminho/para/spritesheet.png
-
-Teclas:
-    1-9  : Trocar animação
-    0    : Animação 10 (die)
-    <- ->: Mover manualmente
-    A    : Ativar/desativar auto-mover
-    +/-  : Velocidade de frames
-    S    : Aumentar escala
-    D    : Diminuir escala
-    ESC  : Sair
 """
 
 import sys
 import math
 import random
+import os
+
+# Tenta importar urllib para download automático da imagem
+try:
+    import urllib.request
+except ImportError:
+    pass  # Falharemos graciosamente se não tiver, pedindo download manual
+
 import pygame
 
 # ── Configuração ──────────────────────────────────────────────────────────────
@@ -39,12 +25,12 @@ import pygame
 WINDOW_W, WINDOW_H = 900, 420
 FPS_CAP = 60
 
-# CORRIGIDO: dimensoes reais de cada frame no spritesheet
+# Dimensões reais de cada frame no spritesheet
 # Spritesheet: 1027x781 -> grade de 10 colunas x 10 linhas
-SPRITE_W = 102   # era 100, correto e 102
-SPRITE_H = 78    # era 100, correto e 78
+SPRITE_W = 102
+SPRITE_H = 78
 
-# CORRIGIDO: mapeamento real das linhas e frames por animacao
+# Mapeamento real das linhas e frames por animacao
 ANIMATIONS = {
     "walk":   {"row": 0, "frames": 6,  "label": "WALK",    "move_speed": 2},
     "walk2":  {"row": 1, "frames": 6,  "label": "WALK 2",  "move_speed": 2},
@@ -71,6 +57,9 @@ COLORS = {
     "trees":       (28,  28,  36),
 }
 
+# URL da imagem fornecida no prompt
+IMAGE_URL = "https://z-cdn-media.chatglm.cn/files/4e7f6c62-fb2d-4baa-958f-c3ec1eb0bd52.png?auth_key=1876109584-50568edfaa3b4a59936ba721638370d9-0-47baca6097ab2b4fb504bbb6a8cf7b86"
+DEFAULT_FILENAME = "spritesheet.png"
 
 # ── Utilitarios ──────────────────────────────────────────────────────────────
 
@@ -80,17 +69,26 @@ def slice_frames(sheet, row, n_frames, fw, fh):
     for col in range(n_frames):
         x = col * fw
         y = row * fh
+        # Verificação de segurança para não sair da imagem
         if y + fh > sheet.get_height() or x + fw > sheet.get_width():
             break
         frames.append(sheet.subsurface(pygame.Rect(x, y, fw, fh)).copy())
     return frames
-
 
 def scale_surf(surf, factor):
     w = max(1, int(surf.get_width() * factor))
     h = max(1, int(surf.get_height() * factor))
     return pygame.transform.scale(surf, (w, h))
 
+def download_image(url, filename):
+    print(f"Baixando imagem de {url}...")
+    try:
+        urllib.request.urlretrieve(url, filename)
+        print("Download concluído!")
+        return True
+    except Exception as e:
+        print(f"Erro no download: {e}")
+        return False
 
 # ── Particulas ────────────────────────────────────────────────────────────────
 
@@ -117,7 +115,19 @@ class Particle:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    sheet_path = sys.argv[1] if len(sys.argv) > 1 else "spritesheet.png"
+    sheet_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_FILENAME
+
+    # Verifica se o arquivo existe, tenta baixar se não existir
+    if not os.path.exists(sheet_path):
+        if 'urllib.request' in sys.modules:
+            if not download_image(IMAGE_URL, sheet_path):
+                print(f"\n[ERRO] Não foi possível baixar a imagem automaticamente.")
+                print(f"Por favor, baixe manualmente e salve como '{sheet_path}'")
+                return
+        else:
+            print(f"\n[ERRO] Arquivo '{sheet_path}' não encontrado.")
+            print("Por favor, coloque a imagem na mesma pasta do script.")
+            return
 
     pygame.init()
     pygame.display.set_caption("Criatura das Sombras — Sprite Animation")
@@ -132,11 +142,8 @@ def main():
         raw_sheet = pygame.image.load(sheet_path).convert_alpha()
         print(f"[OK] Spritesheet: {raw_sheet.get_size()}")
     except pygame.error as e:
-        print(f"\n[ERRO] Nao foi possivel carregar '{sheet_path}': {e}")
-        print("  Coloque o PNG na mesma pasta e rode:")
-        print("  python sprite_animation.py spritesheet.png\n")
-        pygame.quit()
-        sys.exit(1)
+        print(f"\n[ERRO] Não foi possivel carregar '{sheet_path}': {e}")
+        return
 
     # Pre-processa frames
     all_frames = {}
@@ -317,7 +324,6 @@ def main():
         pygame.display.flip()
 
     pygame.quit()
-
 
 if __name__ == "__main__":
     main()
